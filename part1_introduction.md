@@ -37,9 +37,9 @@ def load_data(file_path):
         DataFrame containing the data
     """
     # YOUR CODE HERE
-    # Load the CSV file using pandas
+    df = pd.read_csv(file_path)
     
-    return pd.DataFrame()  # Replace with actual implementation
+    return df 
 ```
 
 ## 3. Data Preparation
@@ -59,14 +59,39 @@ def prepare_data_part1(df, test_size=0.2, random_state=42):
     Returns:
         X_train, X_test, y_train, y_test
     """
-    # YOUR CODE HERE
-    # 1. Select relevant features (age, systolic_bp, diastolic_bp, glucose_level, bmi)
-    # 2. Select target variable (disease_outcome)
-    # 3. Split data into training and testing sets
-    # 4. Handle missing values using SimpleImputer
-    
+    # Define features and outcome
+    feature_cols = ['age', 'systolic_bp', 'diastolic_bp', 'glucose_level', 'bmi']
+    target_col = 'disease_outcome'
+
+    # Select only the columns we want
+    X = df[feature_cols]
+    y = df[target_col]
+
+    # print(f"Missing feature values:\n{X.isna().sum()}\n")
+    # print(f"Missing target values: {y.isna().sum()}")
+
+    # Split using the sklearn function
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+
+    # Handle missing values using SimpleImputer
+    imputer = SimpleImputer(strategy='mean')
+    X_train_imputed = imputer.fit_transform(X_train)
+    X_test_imputed = imputer.transform(X_test)
+
+    # transform into DataFrames (per documentation .fit_transform() and .transform() return ndarrays
+    X_train = pd.DataFrame(X_train_imputed, columns=feature_cols, index=X_train.index)
+    X_test = pd.DataFrame(X_test_imputed, columns=feature_cols, index=X_test.index)
+
+    # print("\nAfter imputation...\n")
+    # print(f"Missing feature values (train):\n{X_train.isna().sum()}\n")
+    # print(f"Missing feature values (test):\n{X_test.isna().sum()}\n")
+    # print(f"Missing target values (train): {y_train.isna().sum()}")
+    # print(f"Missing target values (test): {y_test.isna().sum()}")
+
     # Placeholder return - replace with your implementation
-    return None, None, None, None
+    return X_train, X_test, y_train, y_test
 ```
 
 ## 4. Model Training
@@ -86,9 +111,13 @@ def train_logistic_regression(X_train, y_train):
         Trained logistic regression model
     """
     # YOUR CODE HERE
-    # Initialize and train a LogisticRegression model
+    # Initialize a model
+    model = LogisticRegression() 
+
+    # Train
+    model.fit(X_train, y_train)
     
-    return None  # Replace with actual implementation
+    return model
 ```
 
 ## 5. Model Evaluation
@@ -108,14 +137,22 @@ def calculate_evaluation_metrics(model, X_test, y_test):
     Returns:
         Dictionary containing accuracy, precision, recall, f1, auc, and confusion_matrix
     """
-    # YOUR CODE HERE
     # 1. Generate predictions
-    # 2. Calculate metrics: accuracy, precision, recall, f1, auc
-    # 3. Create confusion matrix
-    # 4. Return metrics in a dictionary
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
     
-    # Placeholder return - replace with your implementation
-    return {}
+    # 2. Calculate metrics: accuracy, precision, recall, f1, auc
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    auc = roc_auc_score(y_test, y_proba)
+    # 3. Create confusion matrix
+    con_mat = confusion_matrix(y_test, y_pred)
+    # 4. Return metrics in a dictionary
+    metrics = {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1, 'AUC': auc, 'confusion matrix': con_mat}
+    
+    return metrics
 ```
 
 ## 6. Save Results
@@ -124,10 +161,12 @@ Save the calculated metrics to a text file.
 
 ```python
 # Create results directory and save metrics
-# YOUR CODE HERE
-# 1. Create 'results' directory if it doesn't exist
-# 2. Format metrics as strings
-# 3. Write metrics to 'results/results_part1.txt'
+def output_results(metrics):
+    os.makedirs('results', exist_ok=True)
+    with open('results/results_part1.txt', 'w') as f:
+        for key, value in metrics.items():
+            f.write(f"{str(key)}: {str(value)}\n")
+    return
 ```
 
 ## 7. Main Execution
@@ -156,7 +195,7 @@ if __name__ == "__main__":
             print(f"{metric}: {value:.4f}")
     
     # 6. Save results
-    # (Your code for saving results)
+    output_results(metrics)
     
     # 7. Interpret results
     interpretation = interpret_results(metrics)
@@ -185,14 +224,27 @@ def interpret_results(metrics):
           the class imbalance affected results (0=no impact, 1=severe impact)
     """
     # YOUR CODE HERE
+    metric_keys = ['accuracy', 'precision', 'recall', 'f1', 'AUC']
+    metric_values = {k: metrics[k] for k in metric_keys}
     # 1. Determine which metric performed best and worst
+    # I'm not sure what best and worst means because all the metrics describe different concepts??
+    best_metric = max(metric_values, key=metric_values.get)
+    worst_metric = min(metric_values, key=metric_values.get)
+    
     # 2. Calculate an imbalance impact score based on the difference
     #    between accuracy and more imbalance-sensitive metrics like F1 or recall
+    # Not sure there is a standard definition for this - could try to resample the data to change the class balance
+    # and then remeasure metrics - but that doesn't seem to be in the spirit of this question
+    # Will define my own score I guess??
+    # Per instructions, will use accuracy, F1, recall, etc., and 0 means little impact while 1 means severe impact
+    # So if accuracy is high and F1 or recall is low, severe impact - can conceptualize this as a simple difference
+    imbalance_impact_score = metrics['accuracy'] - min(metrics['f1'], metrics['recall']) # yields the largest impact score
+    
     # 3. Return the results as a dictionary
     
     # Placeholder return - replace with your implementation
     return {
-        'best_metric': 'unknown',
-        'worst_metric': 'unknown',
-        'imbalance_impact_score': 0.0
+        'best_metric': best_metric,
+        'worst_metric': worst_metric,
+        'imbalance_impact_score': imbalance_impact_score
     }

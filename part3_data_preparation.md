@@ -39,9 +39,9 @@ def load_data(file_path):
         DataFrame containing the data
     """
     # YOUR CODE HERE
-    # Load the CSV file using pandas
+    df = pd.read_csv(file_path, parse_dates=['timestamp'])
     
-    return pd.DataFrame()  # Replace with actual implementation
+    return df 
 ```
 
 ## 3. Categorical Feature Encoding
@@ -62,12 +62,18 @@ def encode_categorical_features(df, column_to_encode='smoker_status'):
     """
     # YOUR CODE HERE
     # 1. Extract the categorical column
+    col_interest = df[[column_to_encode]]
     # 2. Apply OneHotEncoder
+    encoder = OneHotEncoder(sparse_output=False, drop=None)
+    encoded_array = encoder.fit_transform(df[[column_to_encode]])
     # 3. Create new column names
+    encoded_cols = encoder.get_feature_names_out([column_to_encode])
     # 4. Replace the original categorical column with the encoded columns
-    
-    # Placeholder return - replace with your implementation
-    return df.copy()
+    encoded_df = pd.DataFrame(encoded_array, columns=encoded_cols, index=df.index)
+    df_encoded = df.drop(columns=[column_to_encode])
+    df_encoded = pd.concat([df_encoded, encoded_df], axis=1)
+
+    return df_encoded
 ```
 
 ## 4. Data Preparation
@@ -87,14 +93,27 @@ def prepare_data_part3(df, test_size=0.2, random_state=42):
     Returns:
         X_train, X_test, y_train, y_test
     """
-    # YOUR CODE HERE
-    # 1. Encode categorical features using the encode_categorical_features function
-    # 2. Select relevant features (including the one-hot encoded ones) and the target
-    # 3. Split data into training and testing sets
-    # 4. Handle missing values
+    # 1. One-hot encode categorical columns (you can adjust the list as needed)
+    df_encoded = encode_categorical_features(df, column_to_encode='smoker_status')
+
+    # 2. Select features and target
+    feature_cols = ['age', 'systolic_bp', 'diastolic_bp', 'glucose_level', 'bmi'] + \
+                   [col for col in df_encoded.columns if col.startswith('smoker_status_')]
+    target_col = 'disease_outcome'
     
-    # Placeholder return - replace with your implementation
-    return None, None, None, None
+    X = df_encoded[feature_cols]
+    y = df_encoded[target_col]
+
+    # 3. Split into train/test sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state)
+
+    # 4. Impute missing values in features
+    imputer = SimpleImputer(strategy='mean')
+    X_train = pd.DataFrame(imputer.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
+    X_test = pd.DataFrame(imputer.transform(X_test), columns=X_test.columns, index=X_test.index)
+
+    return X_train, X_test, y_train, y_test
 ```
 
 ## 5. Handling Imbalanced Data
@@ -114,11 +133,10 @@ def apply_smote(X_train, y_train, random_state=42):
     Returns:
         Resampled X_train and y_train with balanced classes
     """
-    # YOUR CODE HERE
-    # Apply SMOTE to balance the classes
+    smote = SMOTE(random_state=random_state)
+    X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
     
-    # Placeholder return - replace with your implementation
-    return X_train, y_train
+    return X_resampled, y_resampled
 ```
 
 ## 6. Model Training and Evaluation
@@ -138,9 +156,13 @@ def train_logistic_regression(X_train, y_train):
         Trained logistic regression model
     """
     # YOUR CODE HERE
-    # Initialize and train a LogisticRegression model
+    # Initialize a model
+    model = LogisticRegression(max_iter = 1000) 
+
+    # Train
+    model.fit(X_train, y_train)
     
-    return None  # Replace with actual implementation
+    return model
 
 def calculate_evaluation_metrics(model, X_test, y_test):
     """
@@ -154,14 +176,22 @@ def calculate_evaluation_metrics(model, X_test, y_test):
     Returns:
         Dictionary containing accuracy, precision, recall, f1, auc, and confusion_matrix
     """
-    # YOUR CODE HERE
     # 1. Generate predictions
-    # 2. Calculate metrics: accuracy, precision, recall, f1, auc
-    # 3. Create confusion matrix
-    # 4. Return metrics in a dictionary
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
     
-    # Placeholder return - replace with your implementation
-    return {}
+    # 2. Calculate metrics: accuracy, precision, recall, f1, auc
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    auc = roc_auc_score(y_test, y_proba)
+    # 3. Create confusion matrix
+    con_mat = confusion_matrix(y_test, y_pred)
+    # 4. Return metrics in a dictionary
+    metrics = {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1, 'AUC': auc, 'confusion matrix': con_mat}
+    
+    return metrics
 ```
 
 ## 7. Save Results
@@ -173,6 +203,12 @@ Save the evaluation metrics to a text file.
 # 1. Create 'results' directory if it doesn't exist
 # 2. Format metrics as strings
 # 3. Write metrics to 'results/results_part3.txt'
+def output_results3(metrics):
+    os.makedirs('results', exist_ok=True)
+    with open('results/results_part3.txt', 'w') as f:
+        for key, value in metrics.items():
+            f.write(f"{str(key)}: {str(value)}\n")
+    return
 ```
 
 ## 8. Main Execution
@@ -200,25 +236,53 @@ if __name__ == "__main__":
     
     # 6. Print metrics
     for metric, value in metrics.items():
-        if metric != 'confusion_matrix':
+        if metric != 'confusion matrix':
             print(f"{metric}: {value:.4f}")
     
     # 7. Save results
-    # (Your code for saving results)
+    output_results3(metrics)
     
     # 8. Load Part 1 results for comparison
     import json
+    import re
+
+    part1_metrics = {}
+
     try:
         with open('results/results_part1.txt', 'r') as f:
-            part1_metrics = json.load(f)
-        
-        # 9. Compare models
-        comparison = compare_models(part1_metrics, metrics)
-        print("\nModel Comparison (improvement percentages):")
-        for metric, improvement in comparison.items():
-            print(f"{metric}: {improvement:.2f}%")
+            lines = f.readlines()
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+
+            if line.startswith("confusion matrix:"):
+                matrix = []
+                i += 1  # Move to the next line after 'confusion matrix:'
+                while i < len(lines) and lines[i].strip().startswith('['):
+                    # Extract numbers from the line using regex
+                    nums = list(map(int, re.findall(r'\d+', lines[i])))
+                    matrix.append(nums)
+                    i += 1
+                part1_metrics["confusion matrix"] = matrix
+                continue
+
+            if ":" in line:
+                key, value = line.split(":", 1)
+                key = key.strip()
+                value = float(value.strip())
+                part1_metrics[key] = value
+
+            i += 1
+
     except FileNotFoundError:
-        print("Part 1 results not found. Run part1_introduction.ipynb first.")
+        print("File not found.")
+
+    # 9. Compare models
+    comparison = compare_models(part1_metrics, metrics)
+    print("\nModel Comparison (improvement percentages):")
+    for metric, improvement in comparison.items():
+        print(f"{metric}: {improvement:.2f}%")
 ```
 
 ## 9. Compare Results
@@ -237,16 +301,18 @@ def compare_models(part1_metrics, part3_metrics):
     Returns:
         Dictionary with metric names as keys and improvement percentages as values
     """
-    # YOUR CODE HERE
-    # 1. Calculate percentage improvement for each metric
-    # 2. Handle metrics where higher is better (most metrics) and where lower is better
-    # 3. Return a dictionary with metric names and improvement percentages
+    metrics_to_compare = ['accuracy', 'precision', 'recall', 'f1', 'AUC']
+    improvements = {}
     
-    # Placeholder return - replace with your implementation
-    return {
-        'accuracy': 0.0,
-        'precision': 0.0,
-        'recall': 0.0,
-        'f1': 0.0,
-        'auc': 0.0
-    }
+    # 1. Calculate percentage improvement for each metric
+    for metric in metrics_to_compare:
+        if metric in part1_metrics and metric in part3_metrics:
+            part1_value = part1_metrics[metric]
+            part3_value = part3_metrics[metric]
+
+            change = part3_value - part1_value
+            # calculate percentage improvement
+            pct_improvement = (change / part1_value) * 100
+
+            improvements[metric] = pct_improvement
+    return improvements
